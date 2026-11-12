@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSV to JSON</title>
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#6b6b6b; --line:#ddd; --code:#f6f6f6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161616; --fg:#eaeaea; --muted:#9a9a9a; --line:#333; --code:#1f1f1f; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0 auto; max-width:720px; padding:48px 20px; background:var(--bg); color:var(--fg);
+         font:16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { margin:0; font-size:1.6rem; }
+  .sched { margin:4px 0 40px; color:var(--muted); font-style:italic; }
+  h2 { font-size:1.1rem; margin:32px 0 12px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  button { font:inherit; padding:6px 14px; border:1px solid var(--line); background:var(--bg);
+           color:var(--fg); border-radius:4px; cursor:pointer; }
+  button:hover { border-color:var(--fg); }
+  button:focus-visible, input:focus-visible { outline:2px solid var(--fg); outline-offset:2px; }
+  #msg { color:var(--muted); font-size:.9rem; margin-top:8px; min-height:1.4em; }
+  #msg.error { color:#c0392b; }
+  pre { margin:0; padding:16px; background:var(--code); border:1px solid var(--line); border-radius:4px;
+        overflow:auto; max-height:480px; font:13px/1.5 ui-monospace, Consolas, monospace; }
+</style>
+</head>
+<body>
+
+
+<h1>Zach Rustico C. Sabayton</h1>
+<p class="sched">IT 3206N TTH 6:00-8:30</p>
+
+<h1 style="font-size:1.3rem">CSV to JSON</h1>
+
+<h2>1. Upload CSV</h2>
+<div class="row">
+  <input type="file" id="file" accept=".csv">
+  <button id="convert">Convert CSV to JSON</button>
+</div>
+<div id="msg"></div>
+
+<h2>2. JSON Display</h2>
+<pre id="output">[]</pre>
+
+<script>
+  const PROGRAMS = {
+    BSIT: "Bachelor of Science in Information Technology",
+    BSCS: "Bachelor of Science in Computer Science",
+    BSIS: "Bachelor of Science in Information Systems",
+    BSCPE: "Bachelor of Science in Computer Engineering",
+    BSEMC: "Bachelor of Science in Entertainment and Multimedia Computing"
+  };
+
+  const $ = id => document.getElementById(id);
+  const msg = (t, err) => { $("msg").textContent = t; $("msg").className = err ? "error" : ""; };
+
+ 
+  const capitalize = s => s.trim().toLowerCase().replace(/(^|\s|-)\S/g, c => c.toUpperCase());
+
+ 
+  function parseCSV(text) {
+    const rows = []; let row = [], cell = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) {
+        if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+        else if (c === '"') q = false;
+        else cell += c;
+      } else if (c === '"') q = true;
+      else if (c === ",") { row.push(cell); cell = ""; }
+      else if (c === "\n" || c === "\r") {
+        if (c === "\r" && text[i + 1] === "\n") i++;
+        row.push(cell); rows.push(row); row = []; cell = "";
+      } else cell += c;
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter(r => r.some(v => v.trim() !== ""));
+  }
+
+  function transform(rec) {
+    const course = (rec.course || "").trim();
+    return {
+      studentId: parseInt(rec.student_id, 10),
+      firstName: capitalize(rec.first_name || ""),
+      lastName: capitalize(rec.last_name || ""),
+      program: PROGRAMS[course.toUpperCase()] || course,
+      yearLevel: parseInt(rec.year_level, 10),
+      emailAddress: (rec.email || "").trim().toLowerCase(),
+      outstandingBalance: Number((parseFloat(rec.tuition_balance) || 0).toFixed(2))
+    };
+  }
+
+  $("convert").addEventListener("click", () => {
+    const file = $("file").files[0];
+    if (!file) return msg("Choose a CSV file first.", true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const [head, ...body] = parseCSV(reader.result.replace(/^\uFEFF/, ""));
+        const keys = head.map(h => h.trim());
+        const data = body.map(r => transform(Object.fromEntries(keys.map((k, i) => [k, (r[i] ?? "").trim()]))));
+        $("output").textContent = JSON.stringify(data, null, 4);
+        msg(data.length + " record(s) converted.");
+      } catch (e) {
+        msg("Could not read that file. Check that it is a valid CSV.", true);
+      }
+    };
+    reader.readAsText(file);
+  });
+</script>
+</body>
+</html>
